@@ -32,12 +32,14 @@ post_t *create_post(int id, char *title, int max_size, int user_id) {
 }
 
 // binary search for finding the node with a given id
-post_t *binary_search_node(post_t **events, int size, int id) {
+post_t *binary_search_node(post_t **events, int size, int id, int *pos) {
 	int l = 0, r = size - 1, mid;
 	while (l <= r) {
 		mid = l + (r - l) / 2;
-		if (events[mid]->id == id)
+		if (events[mid]->id == id) {
+			*pos = mid;
 			return events[mid];
+		}
 		if (events[mid]->id < id)
 			l = mid + 1;
 		else
@@ -47,27 +49,39 @@ post_t *binary_search_node(post_t **events, int size, int id) {
 }
 
 // recursive search for the node with a given id
-post_t *search_node_id(post_t *root, int id) {
+post_t *search_node_id(post_t *root, int id, post_t **prev, int *idx) {
 	if (!root)
 		return NULL;
 	if (root->id == id)
 		return root;
 	if (!root->events || !root->num_repost)
 		return NULL;
-	post_t *node = search_node_id(root->events[0], id);
+	post_t *node = search_node_id(root->events[0], id, prev, idx);
+	if (node && *idx == -1) {
+		*prev = root;
+		*idx = 0;
+	}
 	for(int i = 1; i < root->num_repost; i++) {
-		post_t *curr = search_node_id(root->events[i], id);
-		if (curr)
+		post_t *curr = search_node_id(root->events[i], id, prev, idx);
+		if (curr) {
 			node = curr;
+			if (*idx == -1) {
+				*prev = root;
+				*idx = i;
+			}
+		}
 	}
 	return node;
 }
 
 void create_repost(post_trees_t *tree, int post_id, char *name, int repost_id) {
-	post_t *post = binary_search_node(tree->posts, tree->size, post_id);
+	int pos = 0;
+	post_t *post = binary_search_node(tree->posts, tree->size, post_id, &pos);
 	if (repost_id) {
 		// bfs search for the repost id
-		post = search_node_id(post, repost_id);
+		post_t *prev = NULL;
+		int idx = -1;
+		post = search_node_id(post, repost_id, &prev, &idx);
 	} 
 	if (!post->events)
 		post->events = calloc(550, sizeof(post_t *));
@@ -97,17 +111,22 @@ post_t *lca(post_t *root, int id1, int id2) {
 }
 
 void common_repost(post_trees_t *tree, int post_id, int id1, int id2) {
-	post_t *post = binary_search_node(tree->posts, tree->size, post_id);
+	int pos = 0;
+	post_t *post = binary_search_node(tree->posts, tree->size, post_id, &pos);
 	post_t *ancestor = lca(post, id1, id2);
 	printf("The first common repost of %d and %d is %d\n", id1, id2, ancestor->id);
 }
 
 void likes(post_trees_t *tree, char *name, int post_id, int repost_id) {
-	post_t *post = binary_search_node(tree->posts, tree->size, post_id);
+	int pos = 0;
+	post_t *post = binary_search_node(tree->posts, tree->size, post_id, &pos);
 	char *title = strdup(post->title);
 	int user_id = get_user_id(name);
-	if (repost_id)
-		post = search_node_id(post, repost_id);
+	if (repost_id) {
+		post_t *prev = NULL;
+		int idx = -1;
+		post = search_node_id(post, repost_id, &prev, &idx);
+	}
 	if (!post->likes)
 		post->likes = calloc(550, sizeof(int));
 	post->likes[user_id] = ~post->likes[user_id];
@@ -143,7 +162,8 @@ void most_liked_repost(post_t *root, int *max, int *max_id) {
 }
 
 void ratio(post_trees_t *tree, int post_id) {
-	post_t *post = binary_search_node(tree->posts, tree->size, post_id);
+	int pos = 0;
+	post_t *post = binary_search_node(tree->posts, tree->size, post_id, &pos);
 	int max = 0, max_id = 0;
 	most_liked_repost(post, &max, &max_id);
 	if (max > post->num_likes)
@@ -152,44 +172,61 @@ void ratio(post_trees_t *tree, int post_id) {
 		printf("The original post is the highest rated\n");
 }
 
-void delete_post(post_t **post, int *cnt) {
+void delete_post(post_t **post) {
 	if (!(*post))
 		return;
-	(*cnt)++;
 	for (int i = 0; i < (*post)->num_repost; i++) {
-		delete_post(&((*post)->events[i]), cnt);
+		delete_post(&((*post)->events[i]));
 	}
-	if ((*post)->events)
+	if ((*post)->events) {
 		free((*post)->events);
-	if ((*post)->title)
+		(*post)->events = NULL;
+	}
+	if ((*post)->title) {
 		free((*post)->title);
-	if ((*post)->likes)
+		(*post)->title = NULL;
+	}
+	if ((*post)->likes) {
 		free((*post)->likes);
+		(*post)->likes = NULL;
+	}
 	free(*post);
 	*post = NULL;
 }
 
 void delete(post_trees_t *tree, int post_id, int repost_id) {
-	post_t *post = binary_search_node(tree->posts, tree->size, post_id);
+	int pos = 0;
+	post_t *post = binary_search_node(tree->posts, tree->size, post_id, &pos);
 	char *title = strdup(post->title);
-	post_t *root = post;
+	post_t *prev = NULL;
+	int idx = -1;
 	if (repost_id)
-		post = search_node_id(post, repost_id);
+		post = search_node_id(post, repost_id, &prev, &idx);
 	if (post->title)
 		printf("Deleted \"%s\"\n", title);
 	else
 		printf("Deleted repost #%d of post \"%s\"\n", repost_id, title);
-	int num_del = 0;
-	delete_post(&post, &num_del);
-	if (repost_id)
-		root->num_repost -= num_del;
+	delete_post(&post);
+	if (repost_id && idx != -1) {
+		for (int i = idx; i < prev->num_repost - 1; i++)
+			prev->events[i] = prev->events[i + 1];
+		prev->num_repost--;
+	}
+	else {
+		for (int i = pos; i < tree->size - 1; i++)
+			tree->posts[i] = tree->posts[i + 1];
+		tree->size--;
+	}
 	free(title);
 }
 
 void get_likes(post_trees_t *tree, int post_id, int repost_id) {
-	post_t *post = binary_search_node(tree->posts, tree->size, post_id);
+	int pos = 0;
+	post_t *post = binary_search_node(tree->posts, tree->size, post_id, &pos);
 	if (repost_id) {
-		post = search_node_id(post, repost_id);
+		int idx = -1;
+		post_t *prev = NULL;
+		post = search_node_id(post, repost_id, &prev, &idx);
 		printf("Repost #%d has %d likes\n", repost_id, post->num_likes);
 	}
 	else
@@ -208,18 +245,21 @@ void print_reposts(post_t *post) {
 }
 
 void get_reposts(post_trees_t *tree, int post_id, int repost_id) {
-	post_t *post = binary_search_node(tree->posts, tree->size, post_id);
-	if (repost_id)
-		post = search_node_id(post, repost_id);
+	int pos = 0;
+	post_t *post = binary_search_node(tree->posts, tree->size, post_id, &pos);
+	if (repost_id) {
+		post_t *prev = NULL;
+		int idx = -1;
+		post = search_node_id(post, repost_id, &prev, &idx);
+	}
 	if (post->title)
 		printf("\"%s\" - Post by %s\n", post->title, get_user_name(post->user_id));
 	print_reposts(post);
 }
 
 void tree_free(post_trees_t **tree) {
-	int cnt = 0;
-	for (int i = 0; i < (*tree)->size; i++)
-		delete_post(&(*tree)->posts[i], &cnt);
+	for (int i = 0; i < (*tree)->capacity; i++)
+		delete_post(&((*tree)->posts[i]));
 	free((*tree)->posts);
 	free(*tree);
 }

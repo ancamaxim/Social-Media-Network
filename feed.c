@@ -31,13 +31,13 @@ void search_posts_id(post_t *post, int id, char *title) {
 
 void view_profile(char *name, post_trees_t *tree) {
 	int id = get_user_id(name);
-	for (int i = 0; i < tree->size; i++) {
+	for (int i = 0; i < tree->size; i++)
 		if (tree->posts[i]->user_id == id)
 			printf("Posted: \"%s\"\n", tree->posts[i]->title);
+	for (int i = 0; i < tree->size; i++)
 		for (int j = 0; j < tree->posts[i]->num_repost; j++)
 			search_posts_id(tree->posts[i]->events[j], id,
 							tree->posts[i]->title);
-	}
 }
 
 int is_friends_repost(post_t *post, list_graph_t *friends, int id) {
@@ -66,8 +66,9 @@ void search_friends_reposts(post_t *post, list_graph_t *friends, int id) {
 }
 
 void friends_repost(char *name, int id, post_trees_t *tree, list_graph_t *friends) {
-	post_t *post = binary_search_node(tree->posts, tree->size, id);
-	if (is_friends_repost(post, friends, id))
+	int pos = 0;
+	post_t *post = binary_search_node(tree->posts, tree->size, id, &pos);
+	if (is_friends_repost(post, friends, get_user_id(name)))
 		printf("Friends that reposted:\n");
 	search_friends_reposts(post, friends, get_user_id(name));
 }

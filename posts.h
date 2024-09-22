@@ -25,9 +25,9 @@ post_trees_t *init_posts(int capacity);
 
 post_t *create_post(int id, char *title, int max_size, int user_id);
 
-post_t *binary_search_node(post_t **root, int size, int id);
+post_t *binary_search_node(post_t **root, int size, int id, int *pos);
 
-post_t *search_node_id(post_t *root, int id);
+post_t *search_node_id(post_t *root, int id, post_t **prev, int *idx);
 
 void create_repost(post_trees_t *tree, int post_id, char *name, int repost_id);
 
@@ -41,7 +41,7 @@ void most_liked_repost(post_t *root, int *max, int *max_id);
 
 void ratio(post_trees_t *tree, int post_id);
 
-void delete_post(post_t **post, int *cnt);
+void delete_post(post_t **post);
 
 void delete(post_trees_t *tree, int post_id, int repost_id);
 
